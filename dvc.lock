@@ -5,11 +5,11 @@ stages:
     deps:
     - path: src/data/extract_data.py
       hash: md5
-      md5: 9d570d7e9da0fb67d5aa7f00d0e7922c
-      size: 1603
+      md5: 552cfbe51245a5990e3e0839bd80f5a8
+      size: 3568
     outs:
     - path: data/raw
       hash: md5
-      md5: d751713988987e9331980363e24189ce.dir
-      size: 0
-      nfiles: 0
+      md5: 3c985e2362b8da3a45a3bbfce9c7cfe0.dir
+      size: 47870
+      nfiles: 3
