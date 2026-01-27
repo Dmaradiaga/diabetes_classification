@@ -1,0 +1,7 @@
+stages:
+  data_extraction:
+    cmd: python3 src/data/extract_data.py
+    deps:
+    - src/data/extract_data.py
+    outs:
+    - data/raw/diabetes.csv
