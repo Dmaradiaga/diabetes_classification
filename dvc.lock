@@ -1,0 +1,15 @@
+schema: '2.0'
+stages:
+  data_extraction:
+    cmd: python3 src/data/extract_data.py
+    deps:
+    - path: src/data/extract_data.py
+      hash: md5
+      md5: 9d570d7e9da0fb67d5aa7f00d0e7922c
+      size: 1603
+    outs:
+    - path: data/raw
+      hash: md5
+      md5: d751713988987e9331980363e24189ce.dir
+      size: 0
+      nfiles: 0
