@@ -13,3 +13,24 @@ stages:
       md5: 3c985e2362b8da3a45a3bbfce9c7cfe0.dir
       size: 47870
       nfiles: 3
+  processed-data:
+    cmd: python3 src/data/transform_data.py
+    deps:
+    - path: data/raw/test.parquet
+      hash: md5
+      md5: 313a1f25a548680a562ca5f7688b0df2
+      size: 9357
+    - path: data/raw/train.parquet
+      hash: md5
+      md5: 0f783d3f78c7168d5ed90141e2476bc9
+      size: 15223
+    - path: src/data/transform_data.py
+      hash: md5
+      md5: 01b8c8f3d746177f6ad7a93aacfeb625
+      size: 2503
+    outs:
+    - path: data/processed-data
+      hash: md5
+      md5: 08db9ed2242bb8f75dfb8ed581de75e8.dir
+      size: 24646
+      nfiles: 2

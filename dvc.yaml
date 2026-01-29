@@ -5,3 +5,12 @@ stages:
     - src/data/extract_data.py
     outs:
     - data/raw
+
+  processed-data:
+    cmd: python3 src/data/transform_data.py
+    deps:
+    - data/raw/test.parquet
+    - data/raw/train.parquet
+    - src/data/transform_data.py
+    outs:
+    - data/processed-data

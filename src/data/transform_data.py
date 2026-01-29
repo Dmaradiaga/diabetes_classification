@@ -1,55 +1,62 @@
 import os
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from sklearn.impute import SimpleImputer
 
-def clean_and_split_data():
+def transform_data():
     """
-    Lee el archivo raw, aplica limpieza, divide en train/test y guarda en Parquet.
+    Lee archivos parquet de data/raw, aplica limpieza (duplicados, imputación)
+    y guarda en data/processed-data.
     """
     # Directorio raíz del proyecto
     current_file_path = os.path.abspath(__file__)
     project_root = os.path.join(os.path.dirname(current_file_path), "..", "..")
     project_root = os.path.abspath(project_root)
     
-    raw_path = os.path.join(project_root, "data", "raw", "diabetes_raw.csv")
-    
-    if not os.path.exists(raw_path):
-        print(f"Error: No se encuentra el archivo {raw_path}. Ejecuta extract_data.py primero.")
-        return
-
-    # 1. Cargar datos
-    print(f"Cargando datos para transformación desde: {raw_path}")
-    data_raw = pd.read_csv(raw_path)
-
-    # 2. Proceso de limpieza
-    print("Iniciando proceso de limpieza...")
-    initial_shape = data_raw.shape
-    
-    # Eliminar duplicados
-    data_raw = data_raw.drop_duplicates()
-    
-    # Eliminar filas con valores nulos (si las hay)
-    data_raw = data_raw.dropna()
-    
-    print(f"Limpieza completada. Filas originales: {initial_shape[0]}, Filas después de limpieza: {data_raw.shape[0]}")
-
-    # 3. División de datos (Train / Test)
-    print("Dividiendo datos en entrenamiento (80%) y prueba (20%)...")
-    train_data, test_data = train_test_split(data_raw, test_size=0.2, random_state=42)
-
-    # 4. Definir rutas de guardado Parquet
+    raw_dir = os.path.join(project_root, "data", "raw")
     processed_dir = os.path.join(project_root, "data", "processed-data")
     
-    train_output = os.path.join(processed_dir, "train.parquet")
-    test_output = os.path.join(processed_dir, "test.parquet")
+    # Asegurar que el directorio de salida existe
+    os.makedirs(processed_dir, exist_ok=True)
 
-    # 5. Guardar en formato Parquet
-    print("Guardando archivos en formato Parquet...")
-    train_data.to_parquet(train_output, engine='pyarrow', index=False)
-    test_data.to_parquet(test_output, engine='pyarrow', index=False)
+    files = ["train.parquet", "test.parquet"]
+    
+    for filename in files:
+        input_path = os.path.join(raw_dir, filename)
+        output_path = os.path.join(processed_dir, filename)
+        
+        if not os.path.exists(input_path):
+            print(f"Error: No se encuentra el archivo {input_path}. Ejecuta extract_data.py primero.")
+            continue
 
-    print(f"Entrenamiento guardado en: {train_output}")
-    print(f"Prueba guardada en: {test_output}")
+        print(f"--- Procesando {filename} ---")
+        # 1. Cargar datos
+        df = pd.read_parquet(input_path)
+        initial_shape = df.shape
+        
+        # 2. Eliminar duplicados
+        df = df.drop_duplicates()
+        duplicates_removed = initial_shape[0] - df.shape[0]
+        if duplicates_removed > 0:
+            print(f"Se eliminaron {duplicates_removed} filas duplicadas.")
+
+        # 3. Imputación de datos
+        # Usamos SimpleImputer (media para numéricos por defecto)
+        # Identificamos columnas numéricas
+        numeric_cols = df.select_dtypes(include=['number']).columns
+        if not df.empty:
+            imputer = SimpleImputer(strategy='median') # Usamos mediana por ser más robusta
+            df[numeric_cols] = imputer.fit_transform(df[numeric_cols])
+            print(f"Imputación completada en columnas: {list(numeric_cols)}")
+
+        # 4. Revisión de formato (asegurar tipos correctos)
+        # En este dataset específico de diabetes, la mayoría deben ser float o int
+        # Podríamos forzar a float si fuera necesario, pero SimpleImputer suele devolver floats.
+        
+        print(f"Limpieza completada. Filas originales: {initial_shape[0]}, Filas finales: {df.shape[0]}")
+
+        # 5. Guardar en formato Parquet
+        df.to_parquet(output_path, engine='pyarrow', index=False)
+        print(f"Archivo procesado guardado en: {output_path}\n")
 
 if __name__ == "__main__":
-    clean_and_split_data()
+    transform_data()

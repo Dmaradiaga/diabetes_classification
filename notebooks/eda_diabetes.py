@@ -21,7 +21,9 @@ def perform_eda():
     print("--- Cargando datos ---")
     df = pd.read_csv(data_path)
     print(f"Dataset cargado con éxito. Forma: {df.shape}")
-
+    
+    print("\n--- Primeras 5 filas ---")
+    print(df.head())
     # 3. Análisis Descriptivo Básico
     print("\n--- Información General ---")
     df.info()
