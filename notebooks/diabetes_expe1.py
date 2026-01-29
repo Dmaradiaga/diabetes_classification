@@ -11,6 +11,7 @@ from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, classifi
 
 def train_and_log_model(model, name, X_train, y_train, X_test, y_test):
     mlflow.set_experiment("diabetes_classification_experiment1")
+    mlflow.set_tracking_uri("https://dagshub.com/Dmaradiaga/diabetes_classification.mlflow")
     with mlflow.start_run(run_name=name):
         # Entrenar modelo
         model.fit(X_train, y_train)
@@ -28,12 +29,15 @@ def train_and_log_model(model, name, X_train, y_train, X_test, y_test):
         mlflow.log_metric("accuracy", acc)
         mlflow.log_metric("f1_score", f1)
         
-        # Classification report como texto
+        # Classification report como json
         report = classification_report(y_test, y_pred)
-        with open("classification_report.txt", "w") as f:
+        viz_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src", "visualization"))
+        os.makedirs(viz_dir, exist_ok=True)
+        report_path = os.path.join(viz_dir, "classification_report_experiment1.json")
+        
+        with open(report_path, "w") as f:
             f.write(report)
-        mlflow.log_artifact("classification_report.txt")
-        os.remove("classification_report.txt")
+        mlflow.log_artifact(report_path)
         
         # Matriz de confusión
         cm = confusion_matrix(y_test, y_pred)
@@ -42,15 +46,24 @@ def train_and_log_model(model, name, X_train, y_train, X_test, y_test):
         plt.title(f'Confusion Matrix - {name}')
         plt.ylabel('Datos verdaderos')
         plt.xlabel('Datos predichos')
-        plt.savefig("confusion_matrix.png")
-        mlflow.log_artifact("confusion_matrix.png")
+        plt.savefig("confusion_matrix_experiment1.png")
+        mlflow.log_artifact("confusion_matrix_experiment1.png")
         plt.close()
-        os.remove("confusion_matrix.png")
+        os.remove("confusion_matrix_experiment1.png")
+        
+        # Signature e Input Example del modelo
+        signature = mlflow.models.infer_signature(X_train, model.predict(X_train))
+        input_example = X_train.iloc[0:1]
         
         # Registrar modelo
-        mlflow.sklearn.log_model(model, "model")
+        mlflow.sklearn.log_model(
+            model, 
+            name, 
+            signature=signature, 
+            input_example=input_example
+        )
         
-        print(f"Modelo {name} registrado. Accuracy: {acc:.4f}, F1: {f1:.4f}")
+        print(f"Modelo {name} registrado con signature. Accuracy: {acc:.4f}, F1: {f1:.4f}")
 
 def run_experiment():
     # Inicializar Dagshub
@@ -63,7 +76,7 @@ def run_experiment():
     test_path = os.path.join(project_root, "data", "processed-data", "test.parquet")
     
     if not os.path.exists(train_path) or not os.path.exists(test_path):
-        print("Error: No se encuentran los datos procesados. Ejecuta dvc repro o los scripts de datos.")
+        print("Error: No se encuentran los datos procesados. Ejecuta dvc repro.")
         return
 
     # Cargar datos
