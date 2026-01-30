@@ -6,38 +6,54 @@ import dagshub
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pickle
+import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, classification_report
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import RandomizedSearchCV
 
-def train_and_log_model(model, name, X_train, y_train, X_test, y_test, scaler=None):
-    mlflow.set_experiment("diabetes_classification_experiment2")
+def train_and_log_tuned_model(name, model, param_dist, X_train, y_train, X_test, y_test):
+    mlflow.set_experiment("diabetes_classification_experiment3")
     mlflow.set_tracking_uri("https://dagshub.com/Dmaradiaga/diabetes_classification.mlflow")
     
     with mlflow.start_run(run_name=name):
-        # Entrenar modelo
-        model.fit(X_train, y_train)
+        # Búsqueda de hiperparámetros
+        print(f"Iniciando RandomizedSearchCV para {name}...")
+        random_search = RandomizedSearchCV(
+            estimator=model,
+            param_distributions=param_dist,
+            n_iter=20,
+            cv=5,
+            verbose=1,
+            random_state=42,
+            n_jobs=-1,
+            scoring='accuracy'
+        )
+        random_search.fit(X_train, y_train)
         
-        # Predecir
-        y_pred = model.predict(X_test)
+        best_model = random_search.best_estimator_
+        best_params = random_search.best_params_
+        
+        # Predecir con el mejor modelo
+        y_pred = best_model.predict(X_test)
         
         # Calcular métricas
         acc = accuracy_score(y_test, y_pred)
         f1 = f1_score(y_test, y_pred, average='weighted')
         
-        # Registrar parámetros y métricas
-        params = model.get_params()
-        mlflow.log_params(params)
+        # Registrar parámetros del mejor modelo y métricas
+        mlflow.log_params(best_params)
         mlflow.log_metric("accuracy", acc)
         mlflow.log_metric("f1_score", f1)
+        mlflow.log_metric("best_cv_score", random_search.best_score_)
         
-        # Reporte de clasificación como json (aunque sea texto por ahora)
+        # Reporte de clasificación como json
         report = classification_report(y_test, y_pred)
         viz_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src", "visualization"))
         os.makedirs(viz_dir, exist_ok=True)
-        report_path = os.path.join(viz_dir, "classification_report_experiment2.json")
-        matrix_path = os.path.join(viz_dir, "confusion_matrix_experiment2.png")
+        report_path = os.path.join(viz_dir, "classification_report_experiment3.json")
+        matrix_path = os.path.join(viz_dir, "confusion_matrix_experiment3.png")
         
         with open(report_path, "w") as f:
             f.write(report)
@@ -46,36 +62,29 @@ def train_and_log_model(model, name, X_train, y_train, X_test, y_test, scaler=No
         # Matriz de confusión
         cm = confusion_matrix(y_test, y_pred)
         plt.figure(figsize=(8, 6))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Greens') # Diferente color para diferenciar
-        plt.title(f'Confusion Matrix - {name} (Normalized)')
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Oranges')
+        plt.title(f'Confusion Matrix - {name} (Tuned & Normalized)')
         plt.ylabel('Datos verdaderos')
         plt.xlabel('Datos predichos')
         plt.savefig(matrix_path)
         mlflow.log_artifact(matrix_path)
         plt.close()
-       
         
         # Signature e Input Example del modelo
-        signature = mlflow.models.infer_signature(X_train, model.predict(X_train))
+        signature = mlflow.models.infer_signature(X_train, best_model.predict(X_train))
         input_example = X_train.iloc[0:1]
         
         # Registrar modelo
         mlflow.sklearn.log_model(
-            model, 
+            best_model, 
             name, 
             signature=signature, 
             input_example=input_example
         )
         
-        # Registrar escalador si existe
-        if scaler:
-            scaler_path = "scaler.pkl"
-            with open(scaler_path, "wb") as f:
-                pickle.dump(scaler, f)
-            mlflow.log_artifact(scaler_path)
-            os.remove(scaler_path)
+
             
-        print(f"Modelo {name} registrado con signature y normalización. Accuracy: {acc:.4f}, F1: {f1:.4f}")
+        print(f"Modelo {name} optimizado y registrado. Accuracy: {acc:.4f}, Best CV Score: {random_search.best_score_:.4f}")
 
 def run_experiment():
     # Inicializar Dagshub
@@ -99,26 +108,40 @@ def run_experiment():
     X_test = test_df.drop(columns=['Outcome'], axis=1)
     y_test = test_df['Outcome']
     
-    # --- NORMALIZACIÓN ---
-    print("Normalizando datos con StandardScaler...")
+    # Normalización
+    print("Normalizando datos...")
     scaler = StandardScaler()
-    # Identificar columnas numéricas (excluyendo el target que ya quitamos)
-    cols_to_scale = X_train.columns
-    
     scaled_train = scaler.fit_transform(X_train)
     scaled_test = scaler.transform(X_test)
-    
+
     X_train_scaled = pd.DataFrame(scaled_train, columns=X_train.columns)
     X_test_scaled = pd.DataFrame(scaled_test, columns=X_test.columns)
     
+    # --- Definir Espacios de Búsqueda ---
+    
+    # Logística
+    lr_params = {
+        'C': np.logspace(-4, 4, 20),
+        'penalty': ['l2'] # l1 requiere otro solver, simplificamos con l2
+    }
+    
+    # Random Forest
+    rf_params = {
+        'n_estimators': [50, 100, 200, 300],
+        'max_depth': [None, 10, 20, 30],
+        'min_samples_split': [2, 5, 10],
+        'min_samples_leaf': [1, 2, 4],
+        'bootstrap': [True, False]
+    }
+    
     # Experimentos
     models = [
-        (LogisticRegression(max_iter=1000, random_state=42), "Regresion_logistica_Normalizada"),
-        (RandomForestClassifier(n_estimators=100, random_state=42), "Bosques_aleatorios_Normalizada")
+        ("Regresion_logistica_Tuned", LogisticRegression(max_iter=1000, random_state=42), lr_params),
+        ("Bosques_aleatorios_Tuned", RandomForestClassifier(random_state=42), rf_params)
     ]
     
-    for model, name in models:
-        train_and_log_model(model, name, X_train_scaled, y_train, X_test_scaled, y_test, scaler=scaler)
+    for name, model, params in models:
+        train_and_log_tuned_model(name, model, params, X_train_scaled, y_train, X_test_scaled, y_test)
 
 if __name__ == "__main__":
     run_experiment()
