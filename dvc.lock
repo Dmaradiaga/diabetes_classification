@@ -34,3 +34,23 @@ stages:
       md5: 08db9ed2242bb8f75dfb8ed581de75e8.dir
       size: 24646
       nfiles: 2
+  train_model:
+    cmd: python3 src/models/train_model.py
+    deps:
+    - path: data/processed-data/test.parquet
+      hash: md5
+      md5: 590b1cd27cfe10c4a0097bd206ea22e8
+      size: 9399
+    - path: data/processed-data/train.parquet
+      hash: md5
+      md5: 6e21d18782e2c4fed3b914261cdb7068
+      size: 15247
+    - path: src/models/train_model.py
+      hash: md5
+      md5: 916840856b1516a9b12c5b022e78ea2e
+      size: 4852
+    outs:
+    - path: models/bosque_aleatorio.pkl
+      hash: md5
+      md5: a1467080086852cd14ceaf9d9185473a
+      size: 902625
