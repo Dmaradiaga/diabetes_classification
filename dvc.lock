@@ -47,8 +47,8 @@ stages:
       size: 15247
     - path: src/models/train_model.py
       hash: md5
-      md5: 916840856b1516a9b12c5b022e78ea2e
-      size: 4852
+      md5: 1434dcd275023c168b0cbed1629a5f80
+      size: 4879
     outs:
     - path: models/bosque_aleatorio.pkl
       hash: md5

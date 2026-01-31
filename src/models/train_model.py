@@ -118,7 +118,8 @@ def train_final_model():
         input_example = X_train.iloc[0:1]
 
         mlflow.sklearn.log_model(
-            best_pipeline, "bosque_aleatorio",
+            best_pipeline, 
+            artifact_path="bosque_aleatorio",
             signature=signature,
             input_example=input_example,
             registered_model_name="bosque_aleatorio"
