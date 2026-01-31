@@ -1,7 +1,7 @@
 schema: '2.0'
 stages:
   data_extraction:
-    cmd: python3 src/data/extract_data.py
+    cmd: ./my-env/bin/python src/data/extract_data.py
     deps:
     - path: src/data/extract_data.py
       hash: md5
@@ -14,7 +14,7 @@ stages:
       size: 47870
       nfiles: 3
   processed-data:
-    cmd: python3 src/data/transform_data.py
+    cmd: ./my-env/bin/python src/data/transform_data.py
     deps:
     - path: data/raw/test.parquet
       hash: md5
@@ -35,7 +35,7 @@ stages:
       size: 24646
       nfiles: 2
   train_model:
-    cmd: python3 src/models/train_model.py
+    cmd: ./my-env/bin/python src/models/train_model.py
     deps:
     - path: data/processed-data/test.parquet
       hash: md5
@@ -47,10 +47,27 @@ stages:
       size: 15247
     - path: src/models/train_model.py
       hash: md5
-      md5: 0368c00fcd511478571f8f060441c7ea
-      size: 3692
+      md5: 24ab55fbcc3c0ef280d22ea7cf365f09
+      size: 5668
     outs:
-    - path: models/bosque_aleatorio.pkl
+    - path: models/bosque_aleatorio_final.pkl
       hash: md5
       md5: a1467080086852cd14ceaf9d9185473a
       size: 902625
+  register_model:
+    cmd: ./my-env/bin/python src/models/register_model.py
+    deps:
+    - path: models/bosque_aleatorio_final.pkl
+      hash: md5
+      md5: a1467080086852cd14ceaf9d9185473a
+      size: 902625
+    - path: src/models/register_model.py
+      hash: md5
+      md5: 5f21081cc40a309ac630113c8f3adb73
+      size: 4261
+    params:
+      params.yaml:
+        mlflow:
+          model_name: bosque_aleatorio_final
+          experiment_name: Diabetes_clasificacion_Final
+          stage: Staging

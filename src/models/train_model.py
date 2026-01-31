@@ -14,6 +14,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, classification_report
 
+
 def train_final_model():
     # Cargar parámetros
     with open("params.yaml", "r") as f:
@@ -22,6 +23,15 @@ def train_final_model():
     pca_params = params.get("pca", {})
     model_params = params.get("train_model", {})
     
+    #Inicializando dagshub
+    dagshub.init(repo_owner='Dmaradiaga', repo_name='diabetes_classification', mlflow=True)
+    # MLflow Tracking
+    mlflow_config = params.get("mlflow", {})
+    experiment_name = mlflow_config.get("experiment_name", "Diabetes_clasificacion_Final")
+    mlflow.set_experiment(experiment_name)
+    mlflow.set_tracking_uri("https://dagshub.com/Dmaradiaga/diabetes_classification.mlflow")
+   
+   
     # Directorio raíz y rutas
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     train_path = os.path.join(project_root, "data", "processed-data", "train.parquet")
@@ -66,41 +76,73 @@ def train_final_model():
     
     print("Iniciando optimización del Pipeline (RandomizedSearchCV)...")
     
-    # Entrenar modelo con búsqueda
-    random_search.fit(X_train, y_train)
-    
-    best_pipeline = random_search.best_estimator_
-    best_params = random_search.best_params_
-    
-    # Predecir con el mejor modelo
-    y_pred = best_pipeline.predict(X_test)
-    
-    # Calcular métricas
-    acc = accuracy_score(y_test, y_pred)
-    f1 = f1_score(y_test, y_pred, average='weighted')
-    
-    # Guardar la matriz de confusión
-    cm = confusion_matrix(y_test, y_pred)
-    viz_dir = os.path.join(project_root, "src", "visualization")
-    os.makedirs(viz_dir, exist_ok=True)
-    
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Purples')
-    plt.title('Confusion Matrix - Flujo optimizado')
-    plt.ylabel('Datos verdaderos')
-    plt.xlabel('Datos predichos')
-    matrix_path = os.path.join(viz_dir, "final_confusion_matrix.png")
-    plt.savefig(matrix_path)
-    plt.close()
-    
-    # Guardar el mejor modelo con pickle
-    model_path = os.path.join(model_dir, "bosque_aleatorio.pkl")
-    with open(model_path, "wb") as f:
-        pickle.dump(best_pipeline, f)
-    print(f"Mejor modelo guardado en: {model_path}")
-    
-    
-    print(f"Optimización completada. Accuracy: {acc:.4f}, Best CV Score: {random_search.best_score_:.4f}")
+    with mlflow.start_run():
+        # Autologging para parámetros y métricas (desactivamos log_models para asegurar el path 'model' manual)
+        mlflow.sklearn.autolog(log_models=False)
+        
+        # Entrenar modelo con búsqueda
+        random_search.fit(X_train, y_train)
+        
+        best_pipeline = random_search.best_estimator_
+        
+        # Predecir con el mejor modelo
+        y_pred = best_pipeline.predict(X_test)
+        
+        # Calcular métricas adicionales
+        acc = accuracy_score(y_test, y_pred)
+        f1 = f1_score(y_test, y_pred, average='weighted')
+        
+        # Loggear métricas manuales
+        mlflow.log_metric("accuracy", acc)
+        mlflow.log_metric("f1_weighted", f1)
+        
+        # Guardar la matriz de confusión
+        cm = confusion_matrix(y_test, y_pred)
+        viz_dir = os.path.join(project_root, "src", "visualization")
+        os.makedirs(viz_dir, exist_ok=True)
+        
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Purples')
+        plt.title('Confusion Matrix - Flujo optimizado')
+        plt.ylabel('Datos verdaderos')
+        plt.xlabel('Datos predichos')
+        matrix_path = os.path.join(viz_dir, "final_confusion_matrix.png")
+        plt.savefig(matrix_path)
+        plt.close()
+        
+        # Loggear artefactos
+        mlflow.log_artifact(matrix_path, artifact_path="plots")
+        
+        # Inferir signature e input example
+        signature = mlflow.models.infer_signature(X_train, y_train)
+        input_example = X_train.iloc[:5]
+
+        # Loggear el modelo manualmente para asegurar que el path sea 'model'
+        print("Logueando modelo en el path 'model'...")
+        mlflow.sklearn.log_model(
+            sk_model=best_pipeline,
+            artifact_path="model",
+            input_example=input_example,
+            signature=signature)
+        
+        # Esperar un poco para asegurar que Dagshub procese el artifact
+        import time
+        print("Esperando 10 segundos para asegurar el upload en Dagshub...")
+        time.sleep(10)
+        
+        # Verificar si el artifact existe antes de terminar
+        client = mlflow.tracking.MlflowClient()
+        artifacts = client.list_artifacts(mlflow.active_run().info.run_id)
+        artifact_paths = [art.path for art in artifacts]
+        print(f"Artefactos verificados en el run: {artifact_paths}")
+        
+        # Guardar el mejor modelo localmente con pickle
+        model_path = os.path.join(model_dir, "bosque_aleatorio_final.pkl")
+        with open(model_path, "wb") as f:
+            pickle.dump(best_pipeline, f)
+        
+        print(f"Mejor modelo guardado localmente en: {model_path}")
+        print(f"Optimización completada. Accuracy: {acc:.4f}, Best CV Score: {random_search.best_score_:.4f}")
 
 if __name__ == "__main__":
     train_final_model()

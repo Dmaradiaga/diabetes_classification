@@ -1,13 +1,13 @@
 stages:
   data_extraction:
-    cmd: python3 src/data/extract_data.py
+    cmd: ./my-env/bin/python src/data/extract_data.py
     deps:
     - src/data/extract_data.py
     outs:
     - data/raw
 
   processed-data:
-    cmd: python3 src/data/transform_data.py
+    cmd: ./my-env/bin/python src/data/transform_data.py
     deps:
     - data/raw/test.parquet
     - data/raw/train.parquet
@@ -15,10 +15,17 @@ stages:
     outs:
     - data/processed-data
   train_model:
-    cmd: python3 src/models/train_model.py
+    cmd: ./my-env/bin/python src/models/train_model.py
     deps:
     - data/processed-data/test.parquet
     - data/processed-data/train.parquet
     - src/models/train_model.py
     outs:
-    - models/bosque_aleatorio.pkl
+    - models/bosque_aleatorio_final.pkl
+  register_model:
+    cmd: ./my-env/bin/python src/models/register_model.py
+    deps:
+    - src/models/register_model.py
+    - models/bosque_aleatorio_final.pkl
+    params:
+    - mlflow
